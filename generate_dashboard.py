@@ -207,31 +207,6 @@ def load_and_process(files):
     data['pay_distribution'] = pay_dist
 
     # ══════════════════════════════════════════════
-    # 项目进度分布（排除0值）
-    # ══════════════════════════════════════════════
-    prog_bins = [
-        (0.9, 1.001, '90%~100%'), (0.7, 0.9, '70%~90%'), (0.5, 0.7, '50%~70%'),
-        (0.3, 0.5, '30%~50%'), (0.1, 0.3, '10%~30%'), (0.0, 0.1, '0%~10%')
-    ]
-    prog_dist = []
-    for lo, hi, label in prog_bins:
-        sub = df[(df['项目进度'] >= lo) & (df['项目进度'] < hi)]
-        if len(sub) > 0:
-            prog_dist.append({'name': label, 'value': int(len(sub))})
-    data['progress_distribution'] = prog_dist
-
-    # ══════════════════════════════════════════════
-    # 本月部门人力投入（仅数智技术服务中心）
-    # ══════════════════════════════════════════════
-    month_dept_all = df[df['本月投入人力（人月）'] > 0].groupby('所属部门').agg(
-        count=('项目名称', 'count'), month_labor=('本月投入人力（人月）', 'sum')
-    ).reset_index()
-    month_dept_sz = month_dept_all[
-        month_dept_all['所属部门'].isin(sz_project_dept_names)
-    ].sort_values('month_labor', ascending=False)
-    data['month_dept_labor'] = month_dept_sz.to_dict(orient='records')
-
-    # ══════════════════════════════════════════════
     # 合同金额TOP10
     # ══════════════════════════════════════════════
     top10 = df.nlargest(TOP_N, '合同金额（元）')[
@@ -307,6 +282,11 @@ def load_and_process(files):
     )
     dept_sat = dept_sat.sort_values('avg_saturation', ascending=False)
     data['dept_avg_saturation'] = dept_sat[['部门', 'count', 'avg_saturation']].to_dict(orient='records')
+
+    # 按部门人均饱和度的部门顺序重新排列 dept_hours，保持两个模块一致
+    dept_sat_order = dept_sat['部门'].tolist()
+    dept_hours_sorted = sorted(data['dept_hours'], key=lambda d: dept_sat_order.index(d['部门']) if d['部门'] in dept_sat_order else 999)
+    data['dept_hours'] = dept_hours_sorted
 
     # ══════════════════════════════════════════════
     # 低饱和度人员（仅数智技术服务中心）
@@ -466,7 +446,7 @@ body{background:#0a0e27;color:#e0e6f0;font-family:'Microsoft YaHei','PingFang SC
   <div class="kpi-row">
     <div class="kpi-card"><div class="label">项目总数</div><div class="value" id="kpi1">-</div></div>
     <div class="kpi-card"><div class="label">合同金额合计</div><div class="value" id="kpi2">-</div></div>
-    <div class="kpi-card"><div class="label">已回款金额</div><div class="value" id="kpi3">-</div></div>
+    <div class="kpi-card"><div class="label">已回款金额</div><div class="value" id="kpi3">-</div><div class="sub-info" id="kpi3_sub"></div></div>
     <div class="kpi-card"><div class="label">预估实施成本</div><div class="value" id="kpi4">-</div><div class="sub-info" id="kpi4_sub"></div></div>
   </div>
 
@@ -487,24 +467,20 @@ body{background:#0a0e27;color:#e0e6f0;font-family:'Microsoft YaHei','PingFang SC
     </div>
   </div>
 
-  <!-- Row 2: 回款率 + 进度分布 + 本月部门人力投入 -->
-  <div class="grid grid-3">
+  <!-- Row 2: 回款率分布 + TOP10堆叠图 -->
+  <div class="grid grid-2">
     <div class="panel">
       <div class="panel-title"><span class="dot"></span>回款率分布</div>
       <div class="chart-box" id="chart_pay_dist"></div>
     </div>
     <div class="panel">
-      <div class="panel-title"><span class="dot"></span>项目进度分布</div>
-      <div class="chart-box" id="chart_progress_dist"></div>
-    </div>
-    <div class="panel">
-      <div class="panel-title"><span class="dot"></span>本月部门人力投入<span class="badge badge-green">数智技术服务中心</span></div>
-      <div class="chart-box" id="chart_month_dept"></div>
+      <div class="panel-title"><span class="dot"></span>本期人力投入TOP10项目（按部门着色）</div>
+      <div class="chart-box" id="chart_top_month_stacked"></div>
     </div>
   </div>
 
-  <!-- Row 3: 人员工作饱和度 + 部门工时对比 -->
-  <div class="grid grid-2">
+  <!-- Row 3: 人员工作饱和度 + 部门工时对比 + 部门人均饱和度 -->
+  <div class="grid grid-3">
     <div class="panel">
       <div class="panel-title"><span class="dot"></span>人员工作饱和度分析<span class="badge badge-green">数智技术服务中心</span></div>
       <div id="staff_summary_area"></div>
@@ -514,17 +490,9 @@ body{background:#0a0e27;color:#e0e6f0;font-family:'Microsoft YaHei','PingFang SC
       <div class="panel-title"><span class="dot"></span>部门工时投入对比<span class="badge badge-green">数智技术服务中心</span></div>
       <div class="chart-box-sm" id="chart_dept_hours"></div>
     </div>
-  </div>
-
-  <!-- Row 3.5: 部门人均饱和度 + 本期投入TOP项目图 -->
-  <div class="grid grid-2">
     <div class="panel">
       <div class="panel-title"><span class="dot"></span>部门人均工作饱和度<span class="badge badge-green">数智技术服务中心</span></div>
-      <div class="chart-box" id="chart_dept_avg_sat"></div>
-    </div>
-    <div class="panel">
-      <div class="panel-title"><span class="dot"></span>本期人力投入TOP10项目（按部门着色）</div>
-      <div class="chart-box" id="chart_top_month_stacked"></div>
+      <div class="chart-box-sm" id="chart_dept_avg_sat"></div>
     </div>
   </div>
 
@@ -592,10 +560,12 @@ const pct = n => (n*100).toFixed(1)+'%';
 const k = RAW.kpi;
 document.getElementById('kpi1').innerHTML = k.total_projects+'<span class="unit" style="font-size:12px;color:#7a8ba8;font-weight:400;margin-left:3px">个</span>';
 document.getElementById('kpi2').innerHTML = '¥'+fmt(k.total_contract);
-document.getElementById('kpi3').innerHTML = '¥'+fmt(k.total_paid)+'<br><span style="font-size:11px;color:#00e396">回款率 '+pct(k.pay_rate)+'</span>';
+document.getElementById('kpi3').innerHTML = '¥'+fmt(k.total_paid);
+document.getElementById('kpi3_sub').innerHTML = '<span style="color:#00e396">回款率 '+pct(k.pay_rate)+'</span>';
 document.getElementById('kpi4').innerHTML = '¥'+fmt(k.total_cost);
 document.getElementById('kpi4_sub').innerHTML = '<span style="color:#ffb347">合同占比 '+pct(k.cost_ratio)+'</span>';
 document.getElementById('staffBadge').textContent = RAW.staff_summary.total_staff;
+document.getElementById('totalBadge').textContent = k.total_projects;
 
 // ── 本月人力投入 ──
 const ml = RAW.month_labor;
@@ -605,7 +575,7 @@ document.getElementById('labor_summary_area').innerHTML = `
     <div class="summary-divider"></div>
     <div class="summary-stat"><div class="num" style="color:#ffb347">${ml.no_labor_count}</div><div class="lbl">无人力投入</div></div>
     <div class="summary-divider"></div>
-    <div class="summary-stat"><div class="num" style="color:#00d4ff">${ml.has_labor_amount.toFixed(1)}</div><div class="lbl">本月投入合计（人月）</div></div>
+    <div class="summary-stat"><div class="num" style="color:#00d4ff">${ml.has_labor_amount.toFixed(2)}</div><div class="lbl">本月投入合计（人月）</div></div>
   </div>`;
 
 // ── 人员饱和度（不显示实际投入工时） ──
@@ -704,9 +674,7 @@ function initBarHGroup(id, names, series1, series2, name1, name2) {
 initPie('chart_contract_type', RAW.contract_type.map(d=>({name:d['合同签订状态'],value:d.count})), true);
 initPie('chart_ptype', RAW.project_type.map(d=>({name:d['项目类型'],value:d.count})), true);
 initPie('chart_pay_dist', RAW.pay_distribution);
-initBarV('chart_progress_dist', RAW.progress_distribution.map(d=>d.name), RAW.progress_distribution.map(d=>d.value));
 initPie('chart_month_labor', [{name:'有人力投入',value:ml.has_labor_count},{name:'无人力投入',value:ml.no_labor_count}]);
-initBarH('chart_month_dept', RAW.month_dept_labor.map(d=>d['所属部门']), RAW.month_dept_labor.map(d=>parseFloat(d.month_labor.toFixed(1))));
 
 // V2: 饱和度分布
 initPie('chart_saturation', RAW.saturation_dist, true);
@@ -721,10 +689,10 @@ const das_ch = echarts.init(document.getElementById('chart_dept_avg_sat'));
 das_ch.setOption({
   tooltip:{trigger:'axis',axisPointer:{type:'shadow'},backgroundColor:'rgba(10,14,39,0.9)',borderColor:'rgba(0,212,255,0.3)',textStyle:{color:'#e0e6f0'},
     formatter:p=>`${p[0].name}<br/>人均饱和度: <b>${(p[0].value*100).toFixed(1)}%</b><br/>人数: ${das[p[0].dataIndex].count}人`},
-  grid:{left:100,right:40,top:16,bottom:16},
-  xAxis:{type:'value',max:1.2,axisLabel:{color:'#7a8ba8',fontSize:10,formatter:v=>(v*100)+'%'},splitLine:{lineStyle:{color:'rgba(255,255,255,0.04)'}},axisLine:{show:false}},
-  yAxis:{type:'category',data:das.map(d=>d['部门']).reverse(),axisLabel:{color:'#a0aec0',fontSize:10},axisLine:{lineStyle:{color:'rgba(255,255,255,0.08)'}},axisTick:{show:false}},
-  series:[{type:'bar',data:das.map(d=>parseFloat(d.avg_saturation.toFixed(3))).reverse(),barWidth:16,
+  grid:{left:90,right:36,top:12,bottom:12},
+  xAxis:{type:'value',max:1.2,axisLabel:{color:'#7a8ba8',fontSize:8,formatter:v=>(v*100)+'%'},splitLine:{lineStyle:{color:'rgba(255,255,255,0.04)'}},axisLine:{show:false}},
+  yAxis:{type:'category',data:das.map(d=>d['部门']).reverse(),axisLabel:{color:'#a0aec0',fontSize:9},axisLine:{lineStyle:{color:'rgba(255,255,255,0.08)'}},axisTick:{show:false}},
+  series:[{type:'bar',data:das.map(d=>parseFloat(d.avg_saturation.toFixed(3))).reverse(),barWidth:12,
     itemStyle:{borderRadius:[0,6,6,0],
       color:p=>{const v=p.value;if(v>=0.9)return new echarts.graphic.LinearGradient(0,0,1,0,[{offset:0,color:'#00e396'},{offset:1,color:'#00b894'}]);if(v>=0.7)return new echarts.graphic.LinearGradient(0,0,1,0,[{offset:0,color:'#00d4ff'},{offset:1,color:'#0984e3'}]);if(v>=0.5)return new echarts.graphic.LinearGradient(0,0,1,0,[{offset:0,color:'#ffb347'},{offset:1,color:'#fdcb6e'}]);return new echarts.graphic.LinearGradient(0,0,1,0,[{offset:0,color:'#ff6b6b'},{offset:1,color:'#ee5a24'}]);}},
     label:{show:true,position:'right',color:'#a0aec0',fontSize:10,formatter:p=>(p.value*100).toFixed(1)+'%'},
@@ -798,12 +766,13 @@ ha+='<div class="section-label" style="border-left-color:#ffb347">60天内到期
 RAW.expiring_projects.forEach(d=>{ha+=`<tr><td style="max-width:180px;overflow:hidden;text-overflow:ellipsis">${d['项目名称']}</td><td>${d['所属部门']}</td><td><span class="tag tag-orange">${d['禅道是否超期/到期']}</span></td><td>${d['中心人力投入（人月）'].toFixed(2)}</td></tr>`;});
 ha+='</tbody></table>';document.getElementById('table_alerts').innerHTML=ha;
 
-// V2: 本期人力投入项目明细
+// V2: 本期人力投入项目明细（非零数据高亮）
 let hd='<table><thead><tr><th>项目名称</th><th>所属部门</th><th>中心投入</th><th>智能部</th><th>政务部</th><th>大数据部</th><th>产品创新部</th><th>其他</th><th>总投入</th><th>状态</th></tr></thead><tbody>';
 RAW.month_project_detail.forEach(d=>{
   const st = d['禅道是否超期/到期'];
   const tagCls = st && st.includes('超期') ? 'tag-red' : st && st.includes('还有') ? 'tag-orange' : 'tag-blue';
-  hd+=`<tr><td style="max-width:140px;overflow:hidden;text-overflow:ellipsis">${d['项目名称']}</td><td>${d['所属部门']}</td><td>${d['中心人力投入（人月）'].toFixed(2)}</td><td>${d['智能部'].toFixed(2)}</td><td>${d['政务部'].toFixed(2)}</td><td>${d['大数据部'].toFixed(2)}</td><td>${d['产品创新部'].toFixed(2)}</td><td>${d['其他部门投入'].toFixed(2)}</td><td style="font-weight:600">${d['本期总投入（人月）'].toFixed(2)}</td><td><span class="tag ${tagCls}">${st||''}</span></td></tr>`;
+  const hl = v => v > 0 ? `style="color:#00d4ff;font-weight:600"` : 'style="color:#3a4a6a"';
+  hd+=`<tr><td style="max-width:140px;overflow:hidden;text-overflow:ellipsis">${d['项目名称']}</td><td>${d['所属部门']}</td><td ${hl(d['中心人力投入（人月）'])}>${d['中心人力投入（人月）'].toFixed(2)}</td><td ${hl(d['智能部'])}>${d['智能部'].toFixed(2)}</td><td ${hl(d['政务部'])}>${d['政务部'].toFixed(2)}</td><td ${hl(d['大数据部'])}>${d['大数据部'].toFixed(2)}</td><td ${hl(d['产品创新部'])}>${d['产品创新部'].toFixed(2)}</td><td ${hl(d['其他部门投入'])}>${d['其他部门投入'].toFixed(2)}</td><td style="font-weight:700;color:#e0e6f0">${d['本期总投入（人月）'].toFixed(2)}</td><td><span class="tag ${tagCls}">${st||''}</span></td></tr>`;
 });
 hd+='</tbody></table>';document.getElementById('table_month_detail').innerHTML=hd;
 
