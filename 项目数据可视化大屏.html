@@ -1,0 +1,268 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>项目数据可视化大屏</title>
+<script src="https://cdn.jsdelivr.net/npm/echarts@5.5.0/dist/echarts.min.js"></script>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{background:#0a0e27;color:#e0e6f0;font-family:'Microsoft YaHei','PingFang SC',sans-serif;overflow-x:hidden}
+.dashboard{width:100%;min-height:100vh;padding:16px 20px}
+.header{text-align:center;padding:10px 0 18px;position:relative}
+.header h1{font-size:28px;background:linear-gradient(90deg,#00d4ff,#7b61ff,#00d4ff);-webkit-background-clip:text;-webkit-text-fill-color:transparent;letter-spacing:6px;font-weight:700}
+.header .sub{color:#5a6a8a;font-size:13px;margin-top:4px}
+.kpi-row{display:grid;grid-template-columns:repeat(4,1fr);gap:12px 20px;margin-bottom:16px}
+.kpi-card{background:linear-gradient(135deg,rgba(20,30,60,0.9),rgba(10,14,39,0.95));border:1px solid rgba(0,212,255,0.15);border-radius:10px;padding:16px 20px;position:relative;overflow:hidden;min-width:0}
+.kpi-card::before{content:'';position:absolute;top:0;left:0;right:0;height:2px;background:linear-gradient(90deg,transparent,var(--accent),transparent)}
+.kpi-card .label{font-size:12px;color:#7a8ba8;margin-bottom:6px}
+.kpi-card .value{font-size:24px;font-weight:700;color:#fff;white-space:nowrap}
+.kpi-card .value .unit{font-size:12px;color:#7a8ba8;font-weight:400;margin-left:3px}
+.kpi-card .sub-info{font-size:11px;color:#7a8ba8;margin-top:4px}
+.kpi-card:nth-child(1){--accent:#00d4ff}
+.kpi-card:nth-child(2){--accent:#7b61ff}
+.kpi-card:nth-child(3){--accent:#00e396}
+.kpi-card:nth-child(4){--accent:#4ecdc4}
+.grid{display:grid;gap:14px;margin-bottom:14px}
+.grid-2{grid-template-columns:1fr 1fr}
+.grid-3{grid-template-columns:1fr 1fr 1fr}
+.panel{background:linear-gradient(135deg,rgba(20,30,60,0.85),rgba(10,14,39,0.9));border:1px solid rgba(0,212,255,0.1);border-radius:10px;padding:16px;position:relative}
+.panel-title{font-size:14px;font-weight:600;color:#00d4ff;margin-bottom:12px;padding-left:10px;border-left:3px solid #00d4ff;display:flex;align-items:center;gap:6px}
+.panel-title .dot{width:6px;height:6px;border-radius:50%;background:#00d4ff;animation:pulse 2s infinite}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:.3}}
+.chart-box{width:100%;height:280px}
+.chart-box-sm{width:100%;height:240px}
+table{width:100%;border-collapse:collapse;font-size:12px}
+thead th{background:rgba(0,212,255,0.08);color:#7ab8e0;padding:8px 6px;text-align:left;font-weight:600;white-space:nowrap;border-bottom:1px solid rgba(0,212,255,0.15)}
+tbody td{padding:7px 6px;border-bottom:1px solid rgba(255,255,255,0.04);color:#c0c8d8;white-space:nowrap}
+tbody tr:hover{background:rgba(0,212,255,0.05)}
+.progress-bar{display:inline-block;height:6px;border-radius:3px;background:rgba(255,255,255,0.08);width:60px;vertical-align:middle;margin-left:4px}
+.progress-bar .fill{height:100%;border-radius:3px;background:linear-gradient(90deg,#00d4ff,#7b61ff)}
+.tag{display:inline-block;padding:1px 6px;border-radius:3px;font-size:10px}
+.tag-green{background:rgba(0,227,150,0.15);color:#00e396}
+.tag-blue{background:rgba(0,212,255,0.15);color:#00d4ff}
+.tag-orange{background:rgba(255,179,71,0.15);color:#ffb347}
+.tag-red{background:rgba(255,107,107,0.15);color:#ff6b6b}
+.tag-purple{background:rgba(123,97,255,0.15);color:#7b61ff}
+.scroll-table{max-height:310px;overflow-y:auto}
+.scroll-table::-webkit-scrollbar{width:4px}
+.scroll-table::-webkit-scrollbar-thumb{background:rgba(0,212,255,0.2);border-radius:2px}
+.labor-summary{display:flex;gap:20px;justify-content:center;align-items:center;margin-bottom:12px}
+.labor-stat{text-align:center}
+.labor-stat .num{font-size:32px;font-weight:700}
+.labor-stat .num.green{color:#00e396}
+.labor-stat .num.orange{color:#ffb347}
+.labor-stat .lbl{font-size:12px;color:#7a8ba8;margin-top:2px}
+.labor-divider{width:1px;height:50px;background:rgba(255,255,255,0.1)}
+</style>
+</head>
+<body>
+<div class="dashboard">
+  <div class="header">
+    <h1>项 目 数 据 可 视 化 大 屏</h1>
+    <div class="sub">数据统计周期：2026年3月 ｜ 项目总数：<span id="totalBadge">96</span></div>
+  </div>
+
+  <!-- KPI: 4 cards -->
+  <div class="kpi-row">
+    <div class="kpi-card"><div class="label">项目总数</div><div class="value" id="kpi1">-</div></div>
+    <div class="kpi-card"><div class="label">合同金额合计</div><div class="value" id="kpi2">-</div></div>
+    <div class="kpi-card"><div class="label">已回款金额</div><div class="value" id="kpi3">-</div></div>
+    <div class="kpi-card"><div class="label">预估实施成本</div><div class="value" id="kpi4">-</div><div class="sub-info" id="kpi4_sub"></div></div>
+  </div>
+
+  <!-- Row 1: 本月人力投入情况 (NEW) + 合同类型分布 + 项目类型分布 -->
+  <div class="grid grid-3">
+    <div class="panel">
+      <div class="panel-title"><span class="dot"></span>本月人力投入情况</div>
+      <div id="labor_summary_area"></div>
+      <div class="chart-box-sm" id="chart_month_labor"></div>
+    </div>
+    <div class="panel">
+      <div class="panel-title"><span class="dot"></span>合同类型分布</div>
+      <div class="chart-box" id="chart_contract_type"></div>
+    </div>
+    <div class="panel">
+      <div class="panel-title"><span class="dot"></span>项目类型分布</div>
+      <div class="chart-box" id="chart_ptype"></div>
+    </div>
+  </div>
+
+  <!-- Row 2: 回款率分布 + 项目进度分布(排除0) + 本月部门人力投入(NEW) -->
+  <div class="grid grid-3">
+    <div class="panel">
+      <div class="panel-title"><span class="dot"></span>回款率分布</div>
+      <div class="chart-box" id="chart_pay_dist"></div>
+    </div>
+    <div class="panel">
+      <div class="panel-title"><span class="dot"></span>项目进度分布</div>
+      <div class="chart-box" id="chart_progress_dist"></div>
+    </div>
+    <div class="panel">
+      <div class="panel-title"><span class="dot"></span>本月部门人力投入</div>
+      <div class="chart-box" id="chart_month_dept"></div>
+    </div>
+  </div>
+
+  <!-- Row 3: TOP10表格 + 人力投入累计TOP10 -->
+  <div class="grid grid-2">
+    <div class="panel">
+      <div class="panel-title"><span class="dot"></span>合同金额TOP10项目</div>
+      <div class="scroll-table" id="table_top10"></div>
+    </div>
+    <div class="panel">
+      <div class="panel-title"><span class="dot"></span>人力投入累计TOP10项目</div>
+      <div class="scroll-table" id="table_top_labor"></div>
+    </div>
+  </div>
+
+  <!-- Row 4: 挂起项目 -->
+  <div class="grid grid-1" style="grid-template-columns:1fr">
+    <div class="panel">
+      <div class="panel-title"><span class="dot"></span>挂起项目</div>
+      <div class="scroll-table" id="table_suspended"></div>
+    </div>
+  </div>
+</div>
+
+<script>
+const RAW = {"kpi": {"total_projects": 96, "total_contract": 199845280.0, "total_paid": 77368276.0, "total_cost": 91024247.3, "cost_ratio": 0.4554735908698969, "total_month_labor": 41.0173, "total_labor_months": 1969.6872999999998, "pay_rate": 0.38714087217871745}, "month_labor": {"has_labor_count": 29, "no_labor_count": 67, "has_labor_amount": 41.0173, "has_labor_projects": [{"项目名称": "某网格技术示范应用项目", "本月投入人力（人月）": 9.1932, "所属部门": "智能部", "项目经理": "张维"}, {"项目名称": "hj数据治理1000项目", "本月投入人力（人月）": 5.0, "所属部门": "大数据技术部", "项目经理": "连荣光"}, {"项目名称": "西藏信息化运维2026项目", "本月投入人力（人月）": 3.6818, "所属部门": "大数据技术部", "项目经理": "柏垚君"}, {"项目名称": "产品创新部售前", "本月投入人力（人月）": 3.2956, "所属部门": "产品创新部", "项目经理": "李怡潇"}, {"项目名称": "北京市社保卡25-26年运维项目", "本月投入人力（人月）": 3.2472, "所属部门": "智能技术一部", "项目经理": "齐芳"}, {"项目名称": "大庆油田田储备库工程", "本月投入人力（人月）": 1.6818, "所属部门": "产品创新部", "项目经理": "侯世龙"}, {"项目名称": "西藏信用运营项目", "本月投入人力（人月）": 1.5, "所属部门": "大数据技术部", "项目经理": "柏垚君"}, {"项目名称": "河南省监狱局信息化建设", "本月投入人力（人月）": 1.3182, "所属部门": "政务部", "项目经理": "杨振江"}, {"项目名称": "音视频官网", "本月投入人力（人月）": 1.0739, "所属部门": "智能技术一部", "项目经理": "齐芳"}, {"项目名称": "2026年全国执业药师注册管理信息系统运维", "本月投入人力（人月）": 1.0682, "所属部门": "智能技术一部", "项目经理": "时颂坤"}]}, "contract_type": [{"合同签订状态": "内部产品", "count": 6, "amount": 1358000, "paid": 0.0, "cost": 1358000.0, "labor": 140.28}, {"合同签订状态": "内部承接", "count": 19, "amount": 8584186, "paid": 0.0, "cost": 4380774.0, "labor": 298.2161}, {"合同签订状态": "合同项目", "count": 56, "amount": 104655094, "paid": 77368276.0, "cost": 34303550.3, "labor": 1227.8574}, {"合同签订状态": "预投项目", "count": 8, "amount": 85248000, "paid": 0.0, "cost": 50981923.0, "labor": 192.5118}], "department": [{"所属部门": "大数据技术部", "count": 24, "amount": 137722741, "paid": 39163981.0, "cost": 71512965.0, "labor": 806.7309, "progress": 0.6878541666666665}, {"所属部门": "智能技术一部", "count": 24, "amount": 25663116, "paid": 17368250.0, "cost": 6304350.0, "labor": 367.0346, "progress": 0.126175}, {"所属部门": "政务部", "count": 16, "amount": 22892175, "paid": 17864465.0, "cost": 4753323.5, "labor": 299.5009, "progress": 0.06}, {"所属部门": "产品创新部", "count": 3, "amount": 5398000, "paid": 0.0, "cost": 3806340.0, "labor": 75.4165, "progress": 0.02666666666666667}, {"所属部门": "智能物联网部", "count": 8, "amount": 3234050, "paid": 190500.0, "cost": 2601900.0, "labor": 90.7473, "progress": 0.125}, {"所属部门": "智能技术二部", "count": 6, "amount": 2294398, "paid": 698560.0, "cost": 1340568.8, "labor": 111.9975, "progress": 0.0}, {"所属部门": "创新技术部", "count": 5, "amount": 2269000, "paid": 2082520.0, "cost": 333000.0, "labor": 112.44, "progress": 0.196}, {"所属部门": "智能部", "count": 1, "amount": 371800, "paid": 0.0, "cost": 371800.0, "labor": 9.1932, "progress": 0.0}, {"所属部门": "人工智能研究院", "count": 2, "amount": 0, "paid": 0.0, "cost": 0.0, "labor": 0.5, "progress": 0.0}, {"所属部门": "军工业务部", "count": 1, "amount": 0, "paid": 0.0, "cost": 0.0, "labor": 11.03, "progress": 0.0}, {"所属部门": "大数据部", "count": 1, "amount": 0, "paid": 0.0, "cost": 0.0, "labor": 0.2273, "progress": 0.0}, {"所属部门": "政企业务部", "count": 1, "amount": 0, "paid": 0.0, "cost": 0.0, "labor": 9.93, "progress": 0.0}, {"所属部门": "数智技术服务中心", "count": 3, "amount": 0, "paid": 0.0, "cost": 0.0, "labor": 49.2391, "progress": 0.0}, {"所属部门": "解决方案部", "count": 1, "amount": 0, "paid": 0.0, "cost": 0.0, "labor": 25.7, "progress": 0.0}], "project_type": [{"项目类型": "开发建设", "count": 61, "amount": 178728336, "labor": 1476.3025}, {"项目类型": "运维运营", "count": 25, "amount": 17272944, "labor": 321.1928}, {"项目类型": "人力服务", "count": 3, "amount": 3844000, "labor": 61.370000000000005}], "top10": [{"项目名称": "西藏智慧发改", "合同金额（元）": 81000000, "已回款金额（元）": 0.0, "合同回款情况": 0.0, "所属部门": "大数据技术部", "项目阶段": "开发", "项目进度": 0.0}, {"项目名称": "河南省监狱局信息化建设", "合同金额（元）": 14445500, "已回款金额（元）": 13996700.0, "合同回款情况": 0.968927, "所属部门": "政务部", "项目阶段": "运维", "项目进度": 0.96}, {"项目名称": "西藏自治区投资数据综合管理服务平台项目", "合同金额（元）": 11560000, "已回款金额（元）": 11560000.0, "合同回款情况": 1.0, "所属部门": "大数据技术部", "项目阶段": "待归档", "项目进度": 0.95}, {"项目名称": "金林工程", "合同金额（元）": 10900800, "已回款金额（元）": 10900800.0, "合同回款情况": 1.0, "所属部门": "智能技术一部", "项目阶段": "运维", "项目进度": 0.0}, {"项目名称": "西藏发改委信用二期", "合同金额（元）": 9885200, "已回款金额（元）": 9563770.0, "合同回款情况": 0.967483, "所属部门": "大数据技术部", "项目阶段": "运维", "项目进度": 0.95}, {"项目名称": "宜黄县EPC总承包智能化项目", "合同金额（元）": 9242900, "已回款金额（元）": 6000000.0, "合同回款情况": 0.649147, "所属部门": "大数据技术部", "项目阶段": "挂起", "项目进度": 0.85}, {"项目名称": "hj数据治理1000项目", "合同金额（元）": 8061870, "已回款金额（元）": 2821660.0, "合同回款情况": 0.35, "所属部门": "大数据技术部", "项目阶段": "开发", "项目进度": 0.95}, {"项目名称": "大庆油田田储备库工程", "合同金额（元）": 5000000, "已回款金额（元）": 0.0, "合同回款情况": 0.0, "所属部门": "产品创新部", "项目阶段": "启动", "项目进度": 0.0}, {"项目名称": "北京市社保卡25-26年运维项目", "合同金额（元）": 4546000, "已回款金额（元）": 0.0, "合同回款情况": 0.0, "所属部门": "智能技术一部", "项目阶段": "运维", "项目进度": 0.2082}, {"项目名称": "国防科大（运维管控平台）", "合同金额（元）": 3780000, "已回款金额（元）": 756000.0, "合同回款情况": 0.2, "所属部门": "大数据技术部", "项目阶段": "人力服务", "项目进度": 0.3985}], "pay_distribution": [{"name": "全额回款", "value": 17}, {"name": "80%~100%", "value": 8}, {"name": "50%~80%", "value": 5}, {"name": "10%~50%", "value": 11}, {"name": "0%~10%", "value": 15}, {"name": "未回款", "value": 0}], "progress_distribution": [{"name": "90%~100%", "value": 20}, {"name": "70%~90%", "value": 2}, {"name": "50%~70%", "value": 1}, {"name": "30%~50%", "value": 2}, {"name": "10%~30%", "value": 1}, {"name": "0%~10%", "value": 70}], "top_labor": [{"项目名称": "西藏自治区投资数据综合管理服务平台项目", "累计投入工作量（人月）": 144.88, "所属部门": "大数据技术部", "项目经理": "柏垚君"}, {"项目名称": "西藏智慧发改", "累计投入工作量（人月）": 144.1, "所属部门": "大数据技术部", "项目经理": "柏垚君"}, {"项目名称": "hj数据治理1000项目", "累计投入工作量（人月）": 89.36, "所属部门": "大数据技术部", "项目经理": "连荣光"}, {"项目名称": "基层数据服务专区", "累计投入工作量（人月）": 87.05, "所属部门": "大数据技术部", "项目经理": "黄普"}, {"项目名称": "河北电力数据运营中心", "累计投入工作量（人月）": 65.86, "所属部门": "大数据技术部", "项目经理": "黄普"}, {"项目名称": "西藏发改委信用二期", "累计投入工作量（人月）": 60.13, "所属部门": "大数据技术部", "项目经理": "柏垚君"}, {"项目名称": "国防科大（运维管控平台）", "累计投入工作量（人月）": 59.2, "所属部门": "大数据技术部", "项目经理": "可甜"}, {"项目名称": "河南省监狱局信息化建设", "累计投入工作量（人月）": 57.6682, "所属部门": "政务部", "项目经理": "杨振江"}, {"项目名称": "利智方", "累计投入工作量（人月）": 55.69, "所属部门": "创新技术部", "项目经理": "张维"}, {"项目名称": "道路险情自动识别项目", "累计投入工作量（人月）": 54.77, "所属部门": "智能技术二部", "项目经理": "江旭斌"}], "suspended": [{"项目名称": "宜黄县EPC总承包智能化项目", "合同金额（元）": 9242900, "所属部门": "大数据技术部", "项目经理": "徐毅", "项目进度": 0.85}, {"项目名称": "中大京堂", "合同金额（元）": 40000, "所属部门": "智能技术一部", "项目经理": "齐芳", "项目进度": 0.0}, {"项目名称": "小飞智会2.0", "合同金额（元）": 582600, "所属部门": "智能技术一部", "项目经理": "齐芳", "项目进度": 0.0}], "top_owners": [{"商务责任人": "贾红阳", "count": 17, "amount": 106456756}, {"商务责任人": "朱振宁", "count": 9, "amount": 30591350}, {"商务责任人": "汪良波", "count": 11, "amount": 11552321}, {"商务责任人": "胡峰", "count": 2, "amount": 11300800}, {"商务责任人": "常阳", "count": 13, "amount": 8493450}, {"商务责任人": "鞠国明", "count": 14, "amount": 8446675}, {"商务责任人": "张树", "count": 3, "amount": 8359370}, {"商务责任人": "袁金辉", "count": 1, "amount": 5000000}, {"商务责任人": "徐斌", "count": 2, "amount": 4616200}, {"商务责任人": "叶忠波", "count": 5, "amount": 2224198}], "top_pms": [{"项目经理": "柏垚君", "count": 8, "amount": 107120200, "labor": 405.60179999999997}, {"项目经理": "齐芳", "count": 8, "amount": 6583210, "labor": 191.8064}, {"项目经理": "黄普", "count": 5, "amount": 4657950, "labor": 171.76}, {"项目经理": "张维", "count": 6, "amount": 2640800, "labor": 121.6332}, {"项目经理": "刘强", "count": 9, "amount": 5861106, "labor": 116.86}, {"项目经理": "李纪超", "count": 7, "amount": 2246800, "labor": 99.62819999999999}, {"项目经理": "连荣光", "count": 1, "amount": 8061870, "labor": 89.36}, {"项目经理": "可甜", "count": 3, "amount": 4077500, "labor": 88.82000000000001}, {"项目经理": "李鹏飞", "count": 6, "amount": 5139375, "labor": 85.1572}, {"项目经理": "张羽", "count": 7, "amount": 2838050, "labor": 83.32730000000001}], "month_dept_labor": [{"所属部门": "大数据技术部", "count": 7, "month_labor": 11.590900000000001}, {"所属部门": "智能部", "count": 1, "month_labor": 9.1932}, {"所属部门": "政务部", "count": 9, "month_labor": 6.0908999999999995}, {"所属部门": "智能技术一部", "count": 5, "month_labor": 5.9546}, {"所属部门": "产品创新部", "count": 3, "month_labor": 5.8865}, {"所属部门": "智能技术二部", "count": 1, "month_labor": 0.9375}, {"所属部门": "数智技术服务中心", "count": 1, "month_labor": 0.9091}, {"所属部门": "大数据部", "count": 1, "month_labor": 0.2273}, {"所属部门": "智能物联网部", "count": 1, "month_labor": 0.2273}]};
+const fmt = n => {
+  if (n >= 1e8) return (n/1e8).toFixed(2) + '亿';
+  if (n >= 1e4) return (n/1e4).toFixed(1) + '万';
+  return n.toFixed(0);
+};
+const pct = n => (n*100).toFixed(1) + '%';
+
+// ── KPI ──
+const k = RAW.kpi;
+document.getElementById('kpi1').innerHTML = k.total_projects + '<span class="unit">个</span>';
+document.getElementById('kpi2').innerHTML = '¥' + fmt(k.total_contract);
+document.getElementById('kpi3').innerHTML = '¥' + fmt(k.total_paid) + '<br><span class="unit" style="font-size:11px;color:#00e396">回款率 ' + pct(k.pay_rate) + '</span>';
+document.getElementById('kpi4').innerHTML = '¥' + fmt(k.total_cost);
+document.getElementById('kpi4_sub').innerHTML = '<span style="color:#ffb347">合同占比 ' + pct(k.cost_ratio) + '</span>';
+
+// ── 本月人力投入情况 ──
+const ml = RAW.month_labor;
+document.getElementById('labor_summary_area').innerHTML = `
+  <div class="labor-summary">
+    <div class="labor-stat"><div class="num green">${ml.has_labor_count}</div><div class="lbl">有人力投入项目</div></div>
+    <div class="labor-divider"></div>
+    <div class="labor-stat"><div class="num orange">${ml.no_labor_count}</div><div class="lbl">无人力投入项目</div></div>
+    <div class="labor-divider"></div>
+    <div class="labor-stat"><div class="num" style="color:#00d4ff">${ml.has_labor_amount.toFixed(1)}</div><div class="lbl">本月投入合计（人月）</div></div>
+  </div>`;
+
+const COLORS = ['#00d4ff','#7b61ff','#00e396','#ffb347','#ff6b6b','#4ecdc4','#ff9ff3','#54a0ff','#5f27cd','#01a3a4','#f368e0','#ee5a24','#009432','#0652DD'];
+
+function initPie(id, data, rose=false) {
+  const ch = echarts.init(document.getElementById(id));
+  ch.setOption({
+    tooltip:{trigger:'item',formatter:'{b}: {c} ({d}%)',backgroundColor:'rgba(10,14,39,0.9)',borderColor:'rgba(0,212,255,0.3)',textStyle:{color:'#e0e6f0'}},
+    color: COLORS,
+    legend:{type:'scroll',bottom:0,textStyle:{color:'#a0aec0',fontSize:10},pageTextStyle:{color:'#a0aec0'}},
+    series:[{
+      type:'pie', radius: rose ? ['25%','65%'] : ['35%','65%'],
+      center:['50%','48%'], roseType: rose ? 'area' : false,
+      label:{color:'#a0aec0',fontSize:11,formatter:'{b}\n{d}%'},
+      labelLine:{lineStyle:{color:'rgba(255,255,255,0.2)'}},
+      itemStyle:{borderColor:'#0a0e27',borderWidth:2,borderRadius:6},
+      emphasis:{itemStyle:{shadowBlur:15,shadowColor:'rgba(0,212,255,0.4)'},label:{fontSize:13,fontWeight:'bold'}},
+      data: data.map(d=>({name:d.name,value:d.value}))
+    }]
+  });
+  window.addEventListener('resize',()=>ch.resize());
+}
+
+function initBarH(id, names, values) {
+  const ch = echarts.init(document.getElementById(id));
+  ch.setOption({
+    tooltip:{trigger:'axis',axisPointer:{type:'shadow'},backgroundColor:'rgba(10,14,39,0.9)',borderColor:'rgba(0,212,255,0.3)',textStyle:{color:'#e0e6f0'}},
+    grid:{left:110,right:40,top:10,bottom:20},
+    xAxis:{type:'value',axisLabel:{color:'#7a8ba8',fontSize:10,formatter:v=>fmt(v)},splitLine:{lineStyle:{color:'rgba(255,255,255,0.04)'}},axisLine:{show:false}},
+    yAxis:{type:'category',data:names.reverse(),axisLabel:{color:'#a0aec0',fontSize:10},axisLine:{lineStyle:{color:'rgba(255,255,255,0.08)'}},axisTick:{show:false}},
+    series:[{type:'bar',data:values.reverse(),barWidth:14,
+      itemStyle:{borderRadius:[0,4,4,0],color:new echarts.graphic.LinearGradient(0,0,1,0,[{offset:0,color:'#7b61ff'},{offset:1,color:'#00d4ff'}])},
+      label:{show:true,position:'right',color:'#a0aec0',fontSize:10,formatter:p=>fmt(p.value)},
+      emphasis:{itemStyle:{color:new echarts.graphic.LinearGradient(0,0,1,0,[{offset:0,color:'#9b81ff'},{offset:1,color:'#40e0ff'}])}}
+    }]
+  });
+  window.addEventListener('resize',()=>ch.resize());
+}
+
+function initBarV(id, names, values) {
+  const ch = echarts.init(document.getElementById(id));
+  ch.setOption({
+    tooltip:{trigger:'axis',axisPointer:{type:'shadow'},backgroundColor:'rgba(10,14,39,0.9)',borderColor:'rgba(0,212,255,0.3)',textStyle:{color:'#e0e6f0'}},
+    grid:{left:50,right:20,top:20,bottom:40},
+    xAxis:{type:'category',data:names,axisLabel:{color:'#a0aec0',fontSize:10,rotate:names.length>6?25:0},axisLine:{lineStyle:{color:'rgba(255,255,255,0.08)'}},axisTick:{show:false}},
+    yAxis:{type:'value',axisLabel:{color:'#7a8ba8',fontSize:10},splitLine:{lineStyle:{color:'rgba(255,255,255,0.04)'}},axisLine:{show:false}},
+    series:[{type:'bar',data:values,barWidth:names.length>8?16:24,
+      itemStyle:{borderRadius:[4,4,0,0],color:new echarts.graphic.LinearGradient(0,1,0,0,[{offset:0,color:'#7b61ff'},{offset:1,color:'#00d4ff'}])},
+      label:{show:true,position:'top',color:'#a0aec0',fontSize:10}
+    }]
+  });
+  window.addEventListener('resize',()=>ch.resize());
+}
+
+// ── Charts ──
+// 合同类型
+initPie('chart_contract_type', RAW.contract_type.map(d=>({name:d['合同签订状态'],value:d.count})), true);
+
+// 项目类型
+initPie('chart_ptype', RAW.project_type.map(d=>({name:d['项目类型'],value:d.count})), true);
+
+// 回款率分布
+initPie('chart_pay_dist', RAW.pay_distribution);
+
+// 项目进度分布（已排除0）
+initBarV('chart_progress_dist',
+  RAW.progress_distribution.map(d=>d.name),
+  RAW.progress_distribution.map(d=>d.value)
+);
+
+// 本月人力投入：有人力/无人力 饼图
+initPie('chart_month_labor', [
+  {name:'有人力投入', value:ml.has_labor_count},
+  {name:'无人力投入', value:ml.no_labor_count}
+]);
+
+// 本月部门人力投入
+initBarH('chart_month_dept',
+  RAW.month_dept_labor.map(d=>d['所属部门']),
+  RAW.month_dept_labor.map(d=>parseFloat(d.month_labor.toFixed(1)))
+);
+
+// ── Tables ──
+// TOP10
+let h1 = '<table><thead><tr><th>排名</th><th>项目名称</th><th>合同金额</th><th>已回款</th><th>回款率</th><th>阶段</th></tr></thead><tbody>';
+RAW.top10.forEach((d,i)=>{
+  const rate = d['合同回款情况'];
+  const tagCls = rate>=0.9?'tag-green':rate>=0.5?'tag-blue':rate>0?'tag-orange':'tag-red';
+  h1 += `<tr><td>${i+1}</td><td style="max-width:160px;overflow:hidden;text-overflow:ellipsis">${d['项目名称']}</td><td>¥${fmt(d['合同金额（元）'])}</td><td>¥${fmt(d['已回款金额（元）'])}</td><td><span class="tag ${tagCls}">${pct(rate)}</span></td><td>${d['项目阶段']}</td></tr>`;
+});
+h1 += '</tbody></table>';
+document.getElementById('table_top10').innerHTML = h1;
+
+// 人力投入累计TOP10
+let h2 = '<table><thead><tr><th>排名</th><th>项目名称</th><th>投入人月</th><th>所属部门</th><th>项目经理</th></tr></thead><tbody>';
+RAW.top_labor.forEach((d,i)=>{
+  h2 += `<tr><td>${i+1}</td><td style="max-width:160px;overflow:hidden;text-overflow:ellipsis">${d['项目名称']}</td><td>${d['累计投入工作量（人月）'].toFixed(1)}</td><td>${d['所属部门']}</td><td>${d['项目经理']}</td></tr>`;
+});
+h2 += '</tbody></table>';
+document.getElementById('table_top_labor').innerHTML = h2;
+
+// 挂起项目
+let h3 = '<table><thead><tr><th>项目名称</th><th>合同金额</th><th>所属部门</th><th>项目经理</th><th>进度</th></tr></thead><tbody>';
+RAW.suspended.forEach(d=>{
+  const prog = d['项目进度'];
+  const w = (prog*100).toFixed(0);
+  h3 += `<tr><td style="max-width:180px;overflow:hidden;text-overflow:ellipsis">${d['项目名称']}</td><td>¥${fmt(d['合同金额（元）'])}</td><td>${d['所属部门']}</td><td>${d['项目经理']}</td><td>${pct(prog)}<div class="progress-bar"><div class="fill" style="width:${w}%"></div></div></td></tr>`;
+});
+if(RAW.suspended.length===0) h3 += '<tr><td colspan="5" style="text-align:center;color:#5a6a8a">暂无挂起项目</td></tr>';
+h3 += '</tbody></table>';
+document.getElementById('table_suspended').innerHTML = h3;
+
+</script>
+</body>
+</html>
